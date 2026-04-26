@@ -1,12 +1,10 @@
 # ToDo List MVP
 
+Чистый Python (без фреймворков).
+
 ## Запуск
 
 ```bash
-# Установить зависимости
-pip install fastapi uvicorn
-
-# Запустить
 python server.py
 ```
 
@@ -14,17 +12,27 @@ python server.py
 
 ## Структура
 
-- `frontend/` — HTML, CSS, JS
-- `backend/data/tasks.json` — задачи
-- `server.py` — единый сервер (фронт + API)
+```
+to_do_list/
+├── frontend/
+│   ├── index.html
+│   └── src/
+│       ├── main.js
+│       └── style.css
+├── backend/data/
+│   └── tasks.json
+├── server.py      # чистый Python http.server
+├── .gitignore
+└── README.md
+```
 
 ## API
 
 - `GET /api/tasks?view=active` — активные
 - `GET /api/tasks?view=done` — выполненные
 - `GET /api/tasks?view=trash` — корзина
-- `POST /api/tasks` — добавить
-- `PATCH /api/tasks/:id` — обновить
+- `POST /api/tasks` — добавить `{"title": "..."}`
+- `PATCH /api/tasks/:id` — обновить `{"status": "done"}`
 - `DELETE /api/tasks/:id` — в корзину
 - `POST /api/tasks/:id/restore` — восстановить
-- `DELETE /api/tasks/:id/permanent` — удалить
+- `DELETE /api/tasks/:id/permanent` — удалить навсегда

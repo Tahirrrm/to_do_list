@@ -1,120 +1,154 @@
-from fastapi import FastAPI, HTTPException
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from typing import List, Optional
 import json
-from pathlib import Path
-import uvicorn
+import os
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse, parse_qs
 
-app = FastAPI()
+DATA_FILE = "backend/data/tasks.json"
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://127.0.0.1:3000"],
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
-
-app.mount("/static", StaticFiles(directory="frontend"), name="static")
-
-DATA_FILE = Path(__file__).parent / "backend" / "data" / "tasks.json"
-
-def load_tasks() -> List[dict]:
-    if not DATA_FILE.exists():
+def load_tasks():
+    if not os.path.exists(DATA_FILE):
         return []
     with open(DATA_FILE, "r", encoding="utf-8") as f:
         return json.load(f)
 
-def save_tasks(tasks: List[dict]):
+def save_tasks(tasks):
     with open(DATA_FILE, "w", encoding="utf-8") as f:
         json.dump(tasks, f, ensure_ascii=False, indent=2)
 
-class TaskCreate(BaseModel):
-    title: str
+class Handler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        if self.path == "/":
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.end_headers()
+            with open("frontend/index.html", "rb") as f:
+                self.wfile.write(f.read())
+        elif self.path.startswith("/static/"):
+            path = self.path[1:].replace("static/", "frontend/")
+            if os.path.exists(path):
+                self.send_response(200)
+                ext = path.split(".")[-1]
+                ctype = {"js": "application/javascript", "css": "text/css", "png": "image/png"}.get(ext, "text/plain")
+                self.send_header("Content-Type", f"{ctype}; charset=utf-8")
+                self.end_headers()
+                with open(path, "rb") as f:
+                    self.wfile.write(f.read())
+            else:
+                self.send_error(404)
+        elif self.path == "/api/tasks":
+            params = parse_qs(urlparse(self.path).query)
+            view = params.get("view", ["active"])[0]
+            tasks = load_tasks()
+            
+            if view == "active":
+                result = [t for t in tasks if t.get("status") == "active" and not t.get("deleted")]
+            elif view == "done":
+                result = [t for t in tasks if t.get("status") == "done" and not t.get("deleted")]
+            elif view == "trash":
+                result = [t for t in tasks if t.get("deleted")]
+            else:
+                result = []
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(result).encode("utf-8"))
+        else:
+            self.send_error(404)
 
-class TaskUpdate(BaseModel):
-    title: Optional[str] = None
-    status: Optional[str] = None
-
-@app.get("/")
-def index():
-    return FileResponse("frontend/index.html")
-
-@app.get("/api/tasks")
-def get_tasks(view: str = "active"):
-    tasks = load_tasks()
-    
-    if view == "active":
-        return [t for t in tasks if t.get("status") == "active" and not t.get("deleted")]
-    elif view == "done":
-        return [t for t in tasks if t.get("status") == "done" and not t.get("deleted")]
-    elif view == "trash":
-        return [t for t in tasks if t.get("deleted")]
-    return []
-
-@app.post("/api/tasks")
-def create_task(task: TaskCreate):
-    tasks = load_tasks()
-    new_id = max([t["id"] for t in tasks], default=0) + 1
-    
-    new_task = {
-        "id": new_id,
-        "title": task.title,
-        "status": "active",
-        "deleted": False
-    }
-    tasks.append(new_task)
-    save_tasks(tasks)
-    return new_task
-
-@app.patch("/api/tasks/{task_id}")
-def update_task(task_id: int, data: TaskUpdate):
-    tasks = load_tasks()
-    
-    for task in tasks:
-        if task["id"] == task_id:
-            if data.title is not None:
-                task["title"] = data.title
-            if data.status is not None:
-                task["status"] = data.status
+    def do_POST(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode("utf-8")
+        
+        if self.path == "/api/tasks":
+            data = json.loads(body)
+            tasks = load_tasks()
+            new_id = max([t["id"] for t in tasks], default=0) + 1
+            new_task = {"id": new_id, "title": data["title"], "status": "active", "deleted": False}
+            tasks.append(new_task)
             save_tasks(tasks)
-            return task
-    
-    raise HTTPException(status_code=404, detail="Task not found")
-
-@app.delete("/api/tasks/{task_id}")
-def delete_task(task_id: int):
-    tasks = load_tasks()
-    
-    for task in tasks:
-        if task["id"] == task_id:
-            task["deleted"] = True
+            
+            self.send_response(201)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(json.dumps(new_task).encode("utf-8"))
+        
+        elif "/restore" in self.path:
+            path_parts = self.path.split("/")
+            task_id = int(path_parts[2])
+            tasks = load_tasks()
+            for t in tasks:
+                if t["id"] == task_id:
+                    t["deleted"] = False
             save_tasks(tasks)
-            return {"ok": True}
-    
-    raise HTTPException(status_code=404, detail="Task not found")
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+        
+        else:
+            self.send_error(404)
 
-@app.post("/api/tasks/{task_id}/restore")
-def restore_task(task_id: int):
-    tasks = load_tasks()
-    
-    for task in tasks:
-        if task["id"] == task_id:
-            task["deleted"] = False
+    def do_PATCH(self):
+        length = int(self.headers.get("Content-Length", 0))
+        body = self.rfile.read(length).decode("utf-8")
+        
+        if "/api/tasks/" in self.path:
+            path_parts = self.path.split("/")
+            task_id = int(path_parts[3])
+            data = json.loads(body)
+            tasks = load_tasks()
+            
+            for t in tasks:
+                if t["id"] == task_id:
+                    if "title" in data:
+                        t["title"] = data["title"]
+                    if "status" in data:
+                        t["status"] = data["status"]
             save_tasks(tasks)
-            return {"ok": True}
-    
-    raise HTTPException(status_code=404, detail="Task not found")
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+        else:
+            self.send_error(404)
 
-@app.delete("/api/tasks/{task_id}/permanent")
-def permanent_delete(task_id: int):
-    tasks = load_tasks()
-    
-    tasks = [t for t in tasks if t["id"] != task_id]
-    save_tasks(tasks)
-    return {"ok": True}
+    def do_DELETE(self):
+        if "/api/tasks/" in self.path and "/permanent" not in self.path:
+            path_parts = self.path.split("/")
+            task_id = int(path_parts[3])
+            tasks = load_tasks()
+            
+            for t in tasks:
+                if t["id"] == task_id:
+                    t["deleted"] = True
+            save_tasks(tasks)
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+        
+        elif "/permanent" in self.path:
+            path_parts = self.path.split("/")
+            task_id = int(path_parts[2])
+            tasks = load_tasks()
+            tasks = [t for t in tasks if t["id"] != task_id]
+            save_tasks(tasks)
+            
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
+        
+        else:
+            self.send_error(404)
 
-if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=3000)
+    def log_message(self, format, *args):
+        pass
+
+print("ToDo List: http://localhost:3000")
+server = HTTPServer(("127.0.0.1", 3000), Handler)
+server.serve_forever()
