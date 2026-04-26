@@ -3,6 +3,30 @@
     "id": 1,
     "title": "????? ??????",
     "status": "active",
-    "deleted": false
+    "deleted": true
+  },
+  {
+    "id": 2,
+    "title": "апчи",
+    "status": "active",
+    "deleted": true
+  },
+  {
+    "id": 3,
+    "title": "попрол",
+    "status": "active",
+    "deleted": true
+  },
+  {
+    "id": 4,
+    "title": "ролорлроло",
+    "status": "active",
+    "deleted": true
+  },
+  {
+    "id": 5,
+    "title": "купить пивас",
+    "status": "done",
+    "deleted": true
   }
 ]

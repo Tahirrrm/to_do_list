@@ -35,8 +35,9 @@ class Handler(BaseHTTPRequestHandler):
                     self.wfile.write(f.read())
             else:
                 self.send_error(404)
-        elif self.path == "/api/tasks":
-            params = parse_qs(urlparse(self.path).query)
+        elif self.path.startswith("/api/tasks"):
+            parsed = urlparse(self.path)
+            params = parse_qs(parsed.query)
             view = params.get("view", ["active"])[0]
             tasks = load_tasks()
             
@@ -74,8 +75,8 @@ class Handler(BaseHTTPRequestHandler):
             self.wfile.write(json.dumps(new_task).encode("utf-8"))
         
         elif "/restore" in self.path:
-            path_parts = self.path.split("/")
-            task_id = int(path_parts[2])
+            parts = self.path.split("/")
+            task_id = int(parts[2])
             tasks = load_tasks()
             for t in tasks:
                 if t["id"] == task_id:
@@ -95,8 +96,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self.rfile.read(length).decode("utf-8")
         
         if "/api/tasks/" in self.path:
-            path_parts = self.path.split("/")
-            task_id = int(path_parts[3])
+            parts = self.path.split("/")
+            task_id = int(parts[3])
             data = json.loads(body)
             tasks = load_tasks()
             
@@ -116,24 +117,11 @@ class Handler(BaseHTTPRequestHandler):
             self.send_error(404)
 
     def do_DELETE(self):
-        if "/api/tasks/" in self.path and "/permanent" not in self.path:
-            path_parts = self.path.split("/")
-            task_id = int(path_parts[3])
-            tasks = load_tasks()
-            
-            for t in tasks:
-                if t["id"] == task_id:
-                    t["deleted"] = True
-            save_tasks(tasks)
-            
-            self.send_response(200)
-            self.send_header("Content-Type", "application/json")
-            self.end_headers()
-            self.wfile.write(b'{"ok": true}')
+        parts = self.path.split("/")
         
-        elif "/permanent" in self.path:
-            path_parts = self.path.split("/")
-            task_id = int(path_parts[2])
+        if "/permanent" in self.path:
+            # /api/tasks/1/permanent
+            task_id = int(parts[3])
             tasks = load_tasks()
             tasks = [t for t in tasks if t["id"] != task_id]
             save_tasks(tasks)
@@ -142,10 +130,22 @@ class Handler(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "application/json")
             self.end_headers()
             self.wfile.write(b'{"ok": true}')
-        
+        elif "/api/tasks/" in self.path:
+            task_id = int(parts[3])
+            tasks = load_tasks()
+            
+            for t in tasks:
+                if t["id"] == task_id:
+                    t["deleted"] = True
+            save_tasks(tasks)
+            
+self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.end_headers()
+            self.wfile.write(b'{"ok": true}')
         else:
             self.send_error(404)
-
+    
     def log_message(self, format, *args):
         pass
 
