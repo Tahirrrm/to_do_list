@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ToDo List</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="/static/src/style.css">
+</head>
+<body>
+  <div id="app">
+    <header class="header">
+      <h1>Задачи</h1>
+      <nav class="tabs">
+        <button class="tab active" data-view="active">Активные</button>
+        <button class="tab" data-view="done">Выполненные</button>
+        <button class="tab" data-view="trash">Корзина</button>
+      </nav>
+    </header>
+
+    <main class="main">
+      <form class="add-form" id="addForm">
+        <input type="text" class="add-input" placeholder="Новая задача..." required>
+        <button type="submit" class="add-btn">+</button>
+      </form>
+
+      <ul class="task-list" id="taskList"></ul>
+
+      <div class="empty" id="empty">
+        <p>Нет задач</p>
+      </div>
+    </main>
+  </div>
+
+  <script type="module" src="/static/src/main.js"></script>
+</body>
+</html>
